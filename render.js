@@ -1,4 +1,10 @@
+const r=7;
+const center=new spherical4D(r,new cartesian4D(0,0,0,-r));
+const northpole=new spherical4D(r,new cartesian4D(0,0,0,r));
+let inst=[];
 const canvas=document.querySelector(".canvas");
+canvas.width=screen.width;
+canvas.height=screen.height;
 async function main(){
 // webgpuコンテキストの取得
 const context = canvas.getContext('webgpu');
@@ -6,7 +12,6 @@ const context = canvas.getContext('webgpu');
 // deviceの取得
 const g_adapter = await navigator.gpu.requestAdapter();
 const g_device = await g_adapter.requestDevice();
-    
 //デバイスを割り当て
 const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 context.configure({
@@ -22,112 +27,86 @@ var depthTexture;
     format: 'depth24plus',
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
 });
-    const img = document.createElement('img');
-    img.crossOrigin = 'Anonymous';
-    img.src = 'cobblestone.png';
-    await img.decode();
-    const imageBitmap = await createImageBitmap(img);
-
-    texture = g_device.createTexture({
-      size: [imageBitmap.width, imageBitmap.height, 1],
-      format: 'rgba8unorm',
-      usage:
-        GPUTextureUsage.TEXTURE_BINDING |
-        GPUTextureUsage.COPY_DST |
-        GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    g_device.queue.copyExternalImageToTexture(
-      { source: imageBitmap },
-      { texture: texture },
-      [imageBitmap.width, imageBitmap.height]
-    );
-
-//天ぷら油
-  const sampler = g_device.createSampler({
-    magFilter: 'nearest',
-    minFilter: 'nearest',
-  });
     
 const WGSL=`
 struct Uniforms {
-  camera : vec4<f32>,
-  light : vec4<f32>,
-  rot:mat4x4<f32>,
-  view4D: f32,
-  aspect: f32
+    constants:vec4<f32>,
+    rotation:vec4<f32>
 }
-@binding(0) @group(0) var<uniform> uniforms : Uniforms;
-@group(0) @binding(1) var myTexture: texture_2d<f32>;
-@group(0) @binding(2) var mySampler: sampler;
-
-struct VertexOutput {
-  @builtin(position) Position : vec4<f32>,
-  @location(0) fragColor : vec4<f32>,
-  @location(1) light : f32,
-  @location(2) specular:f32,
-  @location(3) wdepth:f32,
-  @location(4) uv:vec2<f32>
+@binding(0) @group(0) var<uniform> uniforms:Uniforms;
+struct VertexOutput{
+  @builtin(position) Position:vec4<f32>,
+  @location(0) fragColor:vec4<f32>,
+  @location(1) normal:vec3<f32>
 }
-fn vec2cliff(u:vec4<f32>)->array<f32,16>{
-    return array<f32,16>(0,u.x,u.y,u.z,u.w,0,0,0,0,0,0,0,0,0,0,0);
+fn mul(p:array<f32,16>,q:array<f32,16>)->array<f32,16>{return array<f32,16>(p[0]*q[0]-p[1]*q[1]-p[2]*q[2]-p[3]*q[3]-p[4]*q[4]-p[5]*q[5]-p[6]*q[6]-p[7]*q[7]-p[8]*q[8]-p[9]*q[9]-p[10]*q[10]+p[11]*q[11]+p[12]*q[12]+p[13]*q[13]+p[14]*q[14]+p[15]*q[15],p[0]*q[1]+p[1]*q[0]+p[2]*q[5]+p[3]*q[6]+p[4]*q[7]-p[5]*q[2]-p[6]*q[3]-p[7]*q[4]-p[8]*q[11]-p[9]*q[12]-p[10]*q[13]-p[11]*q[8]-p[12]*q[9]-p[13]*q[10]-p[14]*q[15]+p[15]*q[14],p[0]*q[2]-p[1]*q[5]+p[2]*q[0]+p[3]*q[8]+p[4]*q[9]+p[5]*q[1]+p[6]*q[11]+p[7]*q[12]-p[8]*q[3]-p[9]*q[4]-p[10]*q[14]+p[11]*q[6]+p[12]*q[7]+p[13]*q[15]-p[14]*q[10]-p[15]*q[13],p[0]*q[3]-p[1]*q[6]-p[2]*q[8]+p[3]*q[0]+p[4]*q[10]-p[5]*q[11]+p[6]*q[1]+p[7]*q[13]+p[8]*q[2]+p[9]*q[14]-p[10]*q[4]-p[11]*q[5]-p[12]*q[15]+p[13]*q[7]+p[14]*q[9]+p[15]*q[12],p[0]*q[4]-p[1]*q[7]-p[2]*q[9]-p[3]*q[10]+p[4]*q[0]-p[5]*q[12]-p[6]*q[13]+p[7]*q[1]-p[8]*q[14]+p[9]*q[2]+p[10]*q[3]+p[11]*q[15]-p[12]*q[5]-p[13]*q[6]-p[14]*q[8]-p[15]*q[11],p[0]*q[5]+p[1]*q[2]-p[2]*q[1]-p[3]*q[11]-p[4]*q[12]+p[5]*q[0]+p[6]*q[8]+p[7]*q[9]-p[8]*q[6]-p[9]*q[7]-p[10]*q[15]-p[11]*q[3]-p[12]*q[4]-p[13]*q[14]+p[14]*q[13]-p[15]*q[10],p[0]*q[6]+p[1]*q[3]+p[2]*q[11]-p[3]*q[1]-p[4]*q[13]-p[5]*q[8]+p[6]*q[0]+p[7]*q[10]+p[8]*q[5]+p[9]*q[15]-p[10]*q[7]+p[11]*q[2]+p[12]*q[14]-p[13]*q[4]-p[14]*q[12]+p[15]*q[9],p[0]*q[7]+p[1]*q[4]+p[2]*q[12]+p[3]*q[13]-p[4]*q[1]-p[5]*q[9]-p[6]*q[10]+p[7]*q[0]-p[8]*q[15]+p[9]*q[5]+p[10]*q[6]-p[11]*q[14]+p[12]*q[2]+p[13]*q[3]+p[14]*q[11]-p[15]*q[8],p[0]*q[8]-p[1]*q[11]+p[2]*q[3]-p[3]*q[2]-p[4]*q[14]+p[5]*q[6]-p[6]*q[5]-p[7]*q[15]+p[8]*q[0]+p[9]*q[10]-p[10]*q[9]-p[11]*q[1]-p[12]*q[13]+p[13]*q[12]-p[14]*q[4]-p[15]*q[7],p[0]*q[9]-p[1]*q[12]+p[2]*q[4]+p[3]*q[14]-p[4]*q[2]+p[5]*q[7]+p[6]*q[15]-p[7]*q[5]-p[8]*q[10]+p[9]*q[0]+p[10]*q[8]+p[11]*q[13]-p[12]*q[1]-p[13]*q[11]+p[14]*q[3]+p[15]*q[6],p[0]*q[10]-p[1]*q[13]-p[2]*q[14]+p[3]*q[4]-p[4]*q[3]-p[5]*q[15]+p[6]*q[7]-p[7]*q[6]+p[8]*q[9]-p[9]*q[8]+p[10]*q[0]-p[11]*q[12]+p[12]*q[11]-p[13]*q[1]-p[14]*q[2]-p[15]*q[5],p[0]*q[11]+p[1]*q[8]-p[2]*q[6]+p[3]*q[5]+p[4]*q[15]+p[5]*q[3]-p[6]*q[2]-p[7]*q[14]+p[8]*q[1]+p[9]*q[13]-p[10]*q[12]+p[11]*q[0]+p[12]*q[10]-p[13]*q[9]+p[14]*q[7]-p[15]*q[4],p[0]*q[12]+p[1]*q[9]-p[2]*q[7]-p[3]*q[15]+p[4]*q[5]+p[5]*q[4]+p[6]*q[14]-p[7]*q[2]-p[8]*q[13]+p[9]*q[1]+p[10]*q[11]-p[11]*q[10]+p[12]*q[0]+p[13]*q[8]-p[14]*q[6]+p[15]*q[3],p[0]*q[13]+p[1]*q[10]+p[2]*q[15]-p[3]*q[7]+p[4]*q[6]-p[5]*q[14]+p[6]*q[4]-p[7]*q[3]+p[8]*q[12]-p[9]*q[11]+p[10]*q[1]+p[11]*q[9]-p[12]*q[8]+p[13]*q[0]+p[14]*q[5]-p[15]*q[2],p[0]*q[14]-p[1]*q[15]+p[2]*q[10]-p[3]*q[9]+p[4]*q[8]+p[5]*q[13]-p[6]*q[12]+p[7]*q[11]+p[8]*q[4]-p[9]*q[3]+p[10]*q[2]-p[11]*q[7]+p[12]*q[6]-p[13]*q[5]+p[14]*q[0]+p[15]*q[1],p[0]*q[15]+p[1]*q[14]-p[2]*q[13]+p[3]*q[12]-p[4]*q[11]+p[5]*q[10]-p[6]*q[9]+p[7]*q[8]+p[8]*q[7]-p[9]*q[6]+p[10]*q[5]+p[11]*q[4]-p[12]*q[3]+p[13]*q[2]-p[14]*q[1]+p[15]*q[0]);}
+fn vec2cliff(v:vec4<f32>)->array<f32,16>{
+return array<f32,16>(0,v.x,v.y,v.z,v.w,0,0,0,0,0,0,0,0,0,0,0);
 }
-fn cliff2vec(u:array<f32,16>)->vec4<f32>{
-    return vec4<f32>(u[1],u[2],u[3],u[4]);
+fn cliff2vec(v:array<f32,16>)->vec4<f32>{
+return vec4<f32>(v[1],v[2],v[3],v[4]);
 }
-fn inverse(u:array<f32,16>)->array<f32,16>{
-    return array<f32,16>(u[0],u[1],u[2],u[3],u[4],-u[5],-u[6],-u[7],-u[8],-u[9],-u[10],-u[11],-u[12],-u[13],-u[14],u[15]);
+fn conjugate(u:array<f32,16>)->array<f32,16>{
+return array<f32,16>(u[0],u[1],u[2],u[3],u[4],-u[5],-u[6],-u[7],-u[8],-u[9],-u[10],-u[11],-u[12],-u[13],-u[14],u[15]);
 }
-fn geoprod(u:array<f32,16>,v:array<f32,16>)->array<f32,16>{
-let r:f32=u[0];let x:f32=u[1];let y:f32=u[2];let z:f32=u[3];let w:f32=u[4];let xy:f32=u[5];let yz:f32=u[6];let xz:f32=u[7];let xw:f32=u[8];let yw:f32=u[9];let zw:f32=u[10];let xyz:f32=u[11];let yzw:f32=u[12];let xzw:f32=u[13];let xyw:f32=u[14];let xyzw:f32=u[15];let R:f32=v[0];let X:f32=v[1];let Y:f32=v[2];let Z:f32=v[3];let W:f32=v[4];let XY:f32=v[5];let YZ:f32=v[6];let XZ:f32=v[7];let XW:f32=v[8];let YW:f32=v[9];let ZW:f32=v[10];let XYZ:f32=v[11];let YZW:f32=v[12];let XZW:f32=v[13];let XYW:f32=v[14];let XYZW:f32=v[15];
-return array<f32,16>((r*R)+(x*X)+(y*Y)+(z*Z)+(w*W)-(xy*XY)-(yz*YZ)-(xz*XZ)-(xw*XW)-(yw*YW)-(zw*ZW)-(xyz*XYZ)-(yzw*YZW)-(xzw*XZW)-(xyw*XYW)+(xyzw*XYZW),(r*X)+(x*R)-(y*XY)-(z*XZ)-(w*XW)+(xy*Y)-(yz*XYZ)+(xz*Z)+(xw*W)-(yw*XYW)-(zw*XZW)-(xyz*YZ)+(yzw*XYZW)-(xzw*ZW)-(xyw*YW)-(xyzw*YZW),(r*Y)+(x*XY)+(y*R)-(z*YZ)-(w*YW)-(xy*X)+(yz*Z)+(xz*XYZ)+(xw*XYW)+(yw*W)-(zw*YZW)+(xyz*XZ)-(yzw*ZW)-(xzw*XYZW)+(xyw*XW)+(xyzw*XZW),(r*Z)+(x*XZ)+(y*YZ)+(z*R)-(w*ZW)-(xy*XYZ)-(yz*Y)-(xz*X)+(xw*XZW)+(yw*YZW)+(zw*W)-(xyz*XY)+(yzw*YW)+(xzw*XW)+(xyw*XYZW)-(xyzw*XYW),(r*W)+(x*XW)+(y*YW)+(z*ZW)+(w*R)-(xy*XYW)-(yz*YZW)-(xz*XZW)-(xw*X)-(yw*Y)-(zw*Z)-(xyz*XYZW)-(yzw*YZ)-(xzw*XZ)-(xyw*XY)+(xyzw*XYZ),(r*XY)+(x*Y)-(y*X)+(z*XYZ)+(w*XYW)+(xy*R)+(yz*XZ)-(xz*YZ)-(xw*YW)+(yw*XW)-(zw*XYZW)+(xyz*Z)+(yzw*XZW)-(xzw*YZW)+(xyw*W)-(xyzw*ZW),(r*YZ)+(x*XYZ)+(y*Z)-(z*Y)+(w*YZW)-(xy*XZ)+(yz*R)+(xz*XY)-(xw*XYZW)-(yw*ZW)+(zw*YW)+(xyz*X)+(yzw*W)+(xzw*XYW)-(xyw*XZW)-(xyzw*XW),(r*XZ)+(x*Z)-(y*XYZ)-(z*X)+(w*XZW)+(xy*YZ)-(yz*XY)+(xz*R)-(xw*ZW)+(yw*XYZW)+(zw*XW)-(xyz*Y)-(yzw*XYW)+(xzw*W)+(xyw*YZW)+(xyzw*YW),(r*XW)+(x*W)-(y*XYW)-(z*XZW)-(w*X)+(xy*YW)-(yz*XYZW)+(xz*ZW)+(xw*R)-(yw*XY)-(zw*XZ)-(xyz*YZW)+(yzw*XYZ)-(xzw*Z)-(xyw*Y)-(xyzw*YZ),(r*YW)+(x*XYW)+(y*W)-(z*YZW)-(w*Y)-(xy*XW)+(yz*ZW)+(xz*XYZW)+(xw*XY)+(yw*R)-(zw*YZ)+(xyz*XZW)-(yzw*Z)-(xzw*XYZ)+(xyw*X)+(xyzw*XZ),(r*ZW)+(x*XZW)+(y*YZW)+(z*W)-(w*Z)-(xy*XYZW)-(yz*YW)-(xz*XW)+(xw*XZ)+(yw*YZ)+(zw*R)-(xyz*XYW)+(yzw*Y)+(xzw*X)+(xyw*XYZ)-(xyzw*XY),(r*XYZ)+(x*YZ)-(y*XZ)+(z*XY)-(w*XYZW)+(xy*Z)+(yz*X)-(xz*Y)+(xw*YZW)-(yw*XZW)+(zw*XYW)+(xyz*R)-(yzw*XW)+(xzw*YW)-(xyw*ZW)+(xyzw*W),(r*YZW)+(x*XYZW)+(y*ZW)-(z*YW)+(w*YZ)-(xy*XZW)+(yz*W)+(xz*XYW)-(xw*XYZ)-(yw*Z)+(zw*Y)+(xyz*XW)+(yzw*R)+(xzw*XY)-(xyw*XZ)-(xyzw*X),(r*XZW)+(x*ZW)-(y*XYZW)-(z*XW)+(w*XZ)+(xy*YZW)-(yz*XYW)+(xz*W)-(xw*Z)+(yw*XYZ)+(zw*X)-(xyz*YW)-(yzw*XY)+(xzw*R)+(xyw*YZ)+(xyzw*Y),(r*XYW)+(x*YW)-(y*XW)+(z*XYZW)+(w*XY)+(xy*W)+(yz*XZW)-(xz*YZW)-(xw*Y)+(yw*X)-(zw*XYZ)+(xyz*ZW)+(yzw*XZ)-(xzw*YZ)+(xyw*R)-(xyzw*Z),(r*XYZW)+(x*YZW)-(y*XZW)+(z*XYW)-(w*XYZ)+(xy*ZW)+(yz*XW)-(xz*YW)+(xw*YZ)-(yw*XZ)+(zw*XY)+(xyz*W)-(yzw*X)+(xzw*Y)-(xyw*Z)+(xyzw*R));
+fn rotate(v:vec4<f32>,rot:array<f32,16>)->vec4<f32>{
+return cliff2vec(mul(mul(rot,vec2cliff(v)),conjugate(rot)));
+}
+fn cliff2rotor(p:vec4<f32>,q:vec4<f32>)->array<f32,8>{
+let v=mul(vec2cliff(p),vec2cliff(q));
+let s:f32=sqrt(v[5]*v[5]+v[6]*v[6]+v[7]*v[7]+v[8]*v[8]+v[9]*v[9]+v[10]*v[10]);
+let P=array<f32,6>(v[5]/s,v[6]/s,v[7]/s,v[8]/s,v[9]/s,v[10]/s);
+let t:f32=acos(dot(p,q)/(uniforms.constants.x*uniforms.constants.x))/2;
+let sint:f32=sin(t);
+return array<f32,8>(cos(t),sint*P[0],sint*P[1],sint*P[2],sint*P[3],sint*P[4],sint*P[5],2*t*uniforms.constants.x);
+}
+fn qmul(p:vec4<f32>,q:vec4<f32>)->vec4<f32>{
+return vec4<f32>(p.x*q.x-dot(p.yzw,q.yzw),
+           p.x*q.y+p.y*q.x+p.z*q.w-p.w*q.z,
+           p.x*q.z+p.z*q.x+p.w*q.y-p.y*q.w,
+           p.x*q.w+p.w*q.x+p.y*q.z-p.z*q.y);
 }
 @vertex
-fn main(@location(0) position: vec4<f32>,@location(1) uv: vec2<f32>,@location(2) color: vec4<f32>,@location(3) pos: vec4<f32>,@location(4) scale: vec4<f32>,@location(5) ray: vec4<f32>,@location(6) joint: vec4<f32>,@location(7) z: vec4<f32>,@location(8) zw: vec4<f32>) -> VertexOutput {
+fn main(@location(0) position: vec4<f32>,@location(1) normal: vec3<f32>,@location(2) color:vec3<f32>,@location(3) pos:vec4<f32>,@location(4) format:f32,@location(5) posture:vec4<f32>) -> VertexOutput {
+  let r=uniforms.constants.x;
+  let center=vec4<f32>(0,0,0,-r);
+  //posからrotを生成。
+  let rotor=cliff2rotor(center,pos);
+  var rot=array<f32,16>(rotor[0],0,0,0,0,rotor[1],rotor[4],rotor[3],rotor[2],rotor[5],rotor[6],0,0,0,0,0);
   var output : VertexOutput;
-  let c=array<f32,16>(
-  uniforms.rot[0][0],uniforms.rot[0][1],uniforms.rot[0][2],uniforms.rot[0][3],
-  uniforms.rot[1][0],uniforms.rot[1][1],uniforms.rot[1][2],uniforms.rot[1][3],
-  uniforms.rot[2][0],uniforms.rot[2][1],uniforms.rot[2][2],uniforms.rot[2][3],
-  uniforms.rot[3][0],uniforms.rot[3][1],uniforms.rot[3][2],uniforms.rot[3][3]
-  );
-  let Z=array<f32,16>(
-  z.x,0,0,0,
-  0,z.y,z.z,z.w,
-  zw.y,zw.z,zw.w,0,
-  0,0,0,zw.x
-  );
-  let ci=inverse(c);
-  let iz=inverse(Z);
-  var p=cliff2vec(geoprod(geoprod(ci,vec2cliff(cliff2vec(geoprod(geoprod(iz,vec2cliff(position*scale+uniforms.camera+pos-joint/2)),Z))+joint/2)),c));
-  let dwst:f32=3;
-  output.wdepth=(p.w+dwst);
-  let wst:f32=abs(p.w+dwst);
-  p=vec4<f32>(p.xyz*dwst/wst,1);
-  var normal=normalize(cliff2vec(geoprod(geoprod(ci,vec2cliff(cliff2vec(geoprod(geoprod(iz,vec2cliff(ray-joint/2)),Z))+joint/2)),c)));
-  var lights:f32=(dot(normal,normalize(uniforms.light-p))+1)/2;
-  output.light=lights;
-  output.specular=pow(dot(normal,normalize(normalize(uniforms.light-p)+normalize(-p))),20);
-  let dst:f32=2;//1.15;
-  let zst:f32=abs(p.z+dst);
-  p=vec4<f32>(p.x*dst/(zst),p.y*dst/(zst)*uniforms.aspect,(p.z+dst)*0.0001,1);
-  output.uv=uv;
-  output.Position=p;
-  output.fragColor=color;
+  var q=position;
+  q=rotate(q,rot);
+  //ステレオグラフィック
+  var p=q.xyz/(1-q.w/r);
+  //姿勢制御
+  var n=normal;
+  if(format==0 || format==2 || format==3){
+  p=qmul(qmul(uniforms.rotation,vec4<f32>(0,p)),vec4<f32>(uniforms.rotation.x,-uniforms.rotation.yzw)).yzw;
+  n=qmul(qmul(uniforms.rotation,vec4<f32>(0,normal)),vec4<f32>(uniforms.rotation.x,-uniforms.rotation.yzw)).yzw;
+  }
+  p=(qmul(qmul(posture,vec4<f32>(0,p)),vec4<f32>(posture.x,-posture.yzw)).yzw);
+  //パースペクティブ
+  p=vec3<f32>(p.x/p.z,uniforms.constants.y*p.y/p.z,p.z*rotor[7]/100000);
+  if(abs(p.x)<=1.5 && abs(p.y)<=1.5){
+  output.Position=vec4<f32>(p,1);
+  output.normal=n;
+  var alpha:f32=1;
+  if(format==2 || format==3){
+  alpha=0;
+  }
+  output.fragColor=vec4<f32>(color/pow(rotor[7],0.5),alpha);
+  }
   return output;
 }
 @fragment
-fn fragmain(@location(0) fragColor: vec4<f32>,@location(1) light: f32,@location(2) specular:f32,@location(3) wdepth:f32,@location(4) uv: vec2<f32>) -> @location(0) vec4<f32> {
-    return vec4<f32>(textureSample(myTexture, mySampler, uv).xyz*light+specular,fragColor.w);
+fn fragmain(@location(0) fragColor: vec4<f32>,@location(1) normal:vec3<f32>) -> @location(0) vec4<f32> {
+    return vec4<f32>((dot(-normal,vec3<f32>(0,0,1))+1)/2*fragColor.xyz,fragColor.w);
 }
 `;
-
-generateVertex();
 function render(){
-hojoscreen();
-//頂点配列
-const quadVertexArray = new Float32Array(vertex);
+const quadVertexArray=vertex;
 // 頂点データを作成.
-const verticesBuffer = g_device.createBuffer({
+const verticesBuffer=g_device.createBuffer({
   size: quadVertexArray.byteLength,
   usage: GPUBufferUsage.VERTEX,
   mappedAtCreation: true,
@@ -136,8 +115,8 @@ new Float32Array(verticesBuffer.getMappedRange()).set(quadVertexArray);
 verticesBuffer.unmap();
 
 //インデックス配列
-const quadIndexArray = new Uint16Array(generateIndex());
-const indicesBuffer = g_device.createBuffer({
+const quadIndexArray=indexarray;
+const indicesBuffer=g_device.createBuffer({
   size: quadIndexArray.byteLength,
   usage: GPUBufferUsage.INDEX,
   mappedAtCreation: true,
@@ -147,7 +126,7 @@ new Uint16Array(indicesBuffer.getMappedRange()).set(quadIndexArray);
 indicesBuffer.unmap();
 
 //Uniformバッファ
-const uniformBufferSize = 4*(3*4+16+1+1);
+const uniformBufferSize = 4*(4+4);
   const uniformBuffer = g_device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -164,12 +143,8 @@ g_device.queue.writeBuffer(
 );
 bufferPosition+=p.byteLength;
 }
-    bind(vec.prod(camera.position,1/2));
-    bind(light);
-    bind(z);
-    bind([0]);
-    bind([canvas.width/canvas.height]);
-
+    bind([r,canvas.width/canvas.height,0,0]);
+    bind(rotation);
 //レンダーパイプラインの設定
 const pipeline = g_device.createRenderPipeline({
   layout: 'auto',
@@ -180,61 +155,45 @@ const pipeline = g_device.createRenderPipeline({
     entryPoint: 'main',
     buffers: [
       {
-        arrayStride: 4*(4+2),
+        arrayStride: 4*(4+3),
         attributes: [
           {
             shaderLocation: 0,
             offset: 0,
             format: 'float32x4',
           },
-        {
+          {
             shaderLocation: 1,
-            offset: 4*4,
-            format: 'float32x2',
-          },
+            offset: 4*(4),
+            format: 'float32x3',
+          }
         ],
       },
         {//インスタンス
-       	  arrayStride: 4*28,
+       	  arrayStride: 4*(3+4+1+4),
           stepMode: 'instance',
           attributes: [
             {
-			  shaderLocation: 3,
+                //color
+			  shaderLocation:2,
               offset: 0,
+              format: 'float32x3'
+            },
+              //rotor <-important
+              {
+			  shaderLocation:3,
+              offset: 4*(3),
               format: 'float32x4'
             },
-            {
-            // color
-            shaderLocation: 2,
-            offset: 4*4,
-            format: 'float32x4',
-            },
-            {
-            // scale
-            shaderLocation: 4,
-            offset: 4*8,
-            format: 'float32x4',
-            },
-              //法線
               {
-            shaderLocation: 5,
-            offset: 4*12,
-            format: 'float32x4',
+			  shaderLocation:4,
+              offset: 4*(3+4),
+              format: 'float32'
             },
               {
-            shaderLocation: 6,
-            offset: 4*16,
-            format: 'float32x4',
-            },
-              {
-            shaderLocation: 7,
-            offset: 4*20,
-            format: 'float32x4',
-            },
-              {
-            shaderLocation: 8,
-            offset: 4*24,
-            format: 'float32x4',
+			  shaderLocation:5,
+              offset: 4*(3+4+1),
+              format: 'float32x4'
             }
           ]
         }
@@ -292,16 +251,8 @@ const bindGroup = g_device.createBindGroup({
       binding: 0,
       resource: {
         buffer: uniformBuffer,
-      },
-    },
-      {
-        binding: 1,
-        resource: texture.createView(),
-      },
-      {
-        binding: 2,
-        resource: sampler,
       }
+    }
   ],
 });
 //コマンドバッファの作成
@@ -312,7 +263,7 @@ const textureView = context.getCurrentTexture().createView();
     colorAttachments: [
       {
         view: textureView,
-        clearValue:{ r: 0.5, g: 0.2, b: 0.1, a: 1.0 },
+        clearValue:{r:0,g:0,b:0,a:1},
         loadOp: 'clear',
         storeOp: 'store',
       },
@@ -330,11 +281,10 @@ const textureView = context.getCurrentTexture().createView();
   //レンダーパイプラインを与える
   passEncoder.setPipeline(pipeline);
   passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.setVertexBuffer(0, verticesBuffer);
+  passEncoder.setVertexBuffer(0,verticesBuffer);
   passEncoder.setIndexBuffer(indicesBuffer, 'uint16');
-  passEncoder.setVertexBuffer(1, instancesBuffer);
-  passEncoder.drawIndexed(quadIndexArray.length,Math.floor(instancePositions.length/28));
-  //passEncoder.draw();
+  passEncoder.setVertexBuffer(1,instancesBuffer);
+  passEncoder.drawIndexed(quadIndexArray.length,Math.floor(instancePositions.length/(3+4+1+4)));
   passEncoder.end();
   g_device.queue.submit([commandEncoder.finish()]);
     requestAnimationFrame(render);

@@ -1,80 +1,199 @@
+//旋回速度は限度があるようにする。
+//また、物体の姿勢を追加。四元数
+let trueview=true;
 let moveVector=[0,0,1];
-let rotation=[0,0,0];
-const r=450;
-let frames=0;
-let auto=false;
-const camera=[0,0,0];//pos-cam->viewpos
-const canvas=document.querySelector(".canvas");
-canvas.width=screen.width-4;
-canvas.height=screen.height-4;
-canvas.style.border="2px solid";
-const ctx=canvas.getContext("2d");
-function clip(u,b){
-    const v=projection.stereographic3D(u);
-    v.x-=camera[0];
-    v.y=-(v.y+camera[1]);
-    v.z-=camera[2];
-    if(v.z>0){
-        const p=projection.perspective(v).scale(canvas.height).add(new cartesian2D(canvas.width/2,canvas.height/2));
-        if(b){
-            return new cartesian(p.x,p.y,canvas.height/v.z);
-        }
-    return p;
-    }
-}
-function point(p){
-    if(p!==undefined){
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,5,0,2*Math.PI);
-    ctx.fill();
-    ctx.closePath();
-    }
-}
-function pointwithSize(p){
-    if(p!==undefined && p.z<200){
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,p.z*0.15,0,2*Math.PI);
-    ctx.fill();
-    ctx.closePath();
-    }
-}
-function plot(v){
-    pointwithSize(clip(v,true));
-}
-const points=[];
-const colors=[];
+let rotVelocity=[0,0];
+let rotation=[1,0,0,0];
+let forward=[0,0,0,0];
+let stars=[];
+let points=[];
+let rays=[];
+
 function translate(){
-    ctx.strokeStyle="#ffffff";
-    ctx.fillStyle="#000000";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    for(let k=0; k<points.length; ++k){
-        let p=points[k];
-        p.rotate(rotation[0],rotation[1],rotation[2]);
-        p.translate(0,0,1);
-        ctx.fillStyle=`rgba(${255*colors[k][0]},${255*colors[k][1]},${255*colors[k][2]},0.66)`;
-        plot(p);
-        //line(p,[1,0,0],r);line(p,[0,1,0],r);line(p,[0,0,1],r);
-        //cube(p,10);
-    }
     keycontrol();
-    frames++;
-    requestAnimationFrame(translate);
-    rotation=[0,0,0]
+    forward=qmul(qmul([rotation[0],-rotation[1],-rotation[2],-rotation[3]],[0,0,0,1/120]),[rotation[0],rotation[1],rotation[2],rotation[3]]);
+    for(const s of stars){
+        s.pos.translate(forward[1],-forward[2],forward[3]);
+    }
+    for(const p of rays){
+        p.pos.translate(forward[1]+p.info.move[0],-forward[2]-p.info.move[1],forward[3]+p.info.move[2]);        
+    }
+    for(const p of points){
+        if(p.tag!="fighter"){
+        p.pos.translate(forward[1],-forward[2],forward[3]);//ブーストで二倍
+        //p.pos.rotate(1/240,0,0);
+        }else{
+            let up=-rotVelocity[1];
+            if(up>0){
+                up*=0.5;
+            }
+            p.posture=rotor3([up,rotVelocity[0]/2,rotVelocity[0]]);
+        }
+    }
+    gameloop();
+    instantiate();
 }
-translate();
+function instantiate(){
+    inst=[];
+    for(const q of points){
+        let type=0;
+        if(q.tag=="fighter"){
+            type=1;
+        }
+        inst.push(...q.color,q.pos.x,q.pos.y,q.pos.z,q.pos.w,type,...q.posture);
+    }
+    for(const q of stars){
+        inst.push(1,1,1,q.pos.x,q.pos.y,q.pos.z,q.pos.w,3,1,0,0,0);
+    }
+    for(const r of rays){
+        inst.push(1,0,0,r.pos.x,r.pos.y,r.pos.z,r.pos.w,2,1,0,0,0);
+    }
+}
 generate();
 function generate(){
     const S=24;//12
-    for(let x=0; x<S; ++x){
-    for(let y=0; y<S; ++y){
-    for(let z=0; z<S; ++z){
-        colors.push([x/S,y/S,z/S]);
-        points.push(new spherical4D(r,new cartesian4D(
+    for(let x=1; x<S; ++x){
+    for(let y=1; y<S; ++y){
+    for(let z=1; z<S; ++z){
+        const pos=new spherical4D(r,new cartesian4D(
             Math.cos(2*Math.PI*x/S)*Math.sin(2*Math.PI*y/S)*Math.sin(2*Math.PI*z/S),
             Math.sin(2*Math.PI*x/S)*Math.sin(2*Math.PI*y/S)*Math.sin(2*Math.PI*z/S),
             Math.cos(2*Math.PI*y/S)*Math.sin(2*Math.PI*z/S),
-            Math.cos(2*Math.PI*z/S)).scale(r)));
+            Math.cos(2*Math.PI*z/S)).scale(r));
+        plot(pos,[1,1,1],"stars");
+        if(Math.random()<0.03/9 && lengthFromPlayer(pos)>2){
+        sphere(pos,"sphere",math.randInt(2,6));
+        }
+    }
+    }
+    }
+    instantiate();
+}
+function plot(spherical,color,tag,info,joint,posture){
+    if(!tag){
+        tag="global";
+    }
+    if(!posture){
+        posture=[1,0,0,0];
+    }
+    if(!joint){
+        joint=[0,0,0];
+    }
+    if(tag=="rays"){
+        rays.push({
+        posture:posture,
+        color:color,
+        pos:spherical,
+        tag:tag,
+        info:info,
+        joint:joint,
+        seed:Math.random()
+        });
+    }else if(tag=="stars"){
+    stars.push({
+        posture:posture,
+        color:color,
+        pos:spherical,
+        tag:tag,
+        info:info,
+        joint:joint,
+        seed:Math.random()
+    });
+    }else{
+    points.push({
+        posture:posture,
+        color:color,
+        pos:spherical,
+        tag:tag,
+        info:info,
+        joint:joint,
+        seed:Math.random()
+    });
+    }
+}
+function getrotor(p){
+    //これ以上高速化できるだろうか？
+    const g=center.rotor(p);
+    if(g==-1){
+        return [[1,0,0,0,0,0,0,0],0];
+    }
+    const t=center.arg(p)/2;
+    const sint=Math.sin(t);
+    return [
+        [Math.cos(t),g[0]*sint,g[1]*sint,g[2]*sint,g[3]*sint,g[4]*sint,g[5]*sint,0],
+        t*2*p.r
+        ];
+}
+function test(index){
+    const p=points[index].pos;
+    const R=getrotor(p);
+    console.log(R);
+    const rot=[R[0],0,0,0,0,R[1],R[2],R[3],R[4],R[5],R[6],0,0,0,0,R[7]];
+    center.cliffordrotate(rot);
+    console.log(p,center);
+}
+function lengthFromPlayer(p){
+    const d=p.r*(Math.PI-Math.acos(p.w/Math.sqrt(p.x*p.x+p.y*p.y+p.z*p.z+p.w*p.w)));
+    if(isNaN(d)){
+        return 0;
+    }
+    return d;
+}
+function sphere(p,tag,s){
+    const C=[Math.random(),Math.random(),Math.random()];
+    for(let i=-s; i<=s; ++i){
+    for(let j=-s; j<=s; ++j){
+    for(let k=-s; k<=s; ++k){
+        if(Math.abs(i*i+j*j+k*k-s*s)<s && Math.abs(r*Math.PI/2-center.length(p))>3){
+    plot(p.translateBack(i/100,j/100,k/100),C,tag);
+        }
     }
     }
     }
 }
+//for modeling
+function boxp(p,pos,size,color,tag,info,joint){
+    const offset=[size[0]/2,size[1]/2,size[2]/2];
+    for(let i=0; i<size[0]; ++i){
+    for(let j=0; j<size[1]; ++j){
+    for(let k=0; k<size[2]; ++k){
+        plot(p.translateBack((pos[0]-offset[0]+0.5)/100+i/100,(pos[1]-offset[1]+0.5)/100+j/100,(pos[2]-offset[2]+0.5)/100+k/100),color,tag,info,joint);
+    }
+    }
+    }
+}
+function box(pos,size,color,tag,info,joint){
+    //size should be in N
+    const offset=[size[0]/2,size[1]/2,size[2]/2];
+    for(let i=0; i<size[0]; ++i){
+    for(let j=0; j<size[1]; ++j){
+    for(let k=0; k<size[2]; ++k){
+        plot(center.translateBack((pos[0]-offset[0]+0.5)/100+i/100,(pos[1]-offset[1]+0.5)/100+j/100,(pos[2]-offset[2]+0.5)/100+k/100),color,tag,info,joint);
+    }
+    }
+    }
+}
+function qmul(p,q){
+    return [p[0]*q[0]-p[1]*q[1]-p[2]*q[2]-p[3]*q[3],
+           p[0]*q[1]+p[1]*q[0]+p[2]*q[3]-p[3]*q[2],
+           p[0]*q[2]+p[2]*q[0]+p[3]*q[1]-p[1]*q[3],
+           p[0]*q[3]+p[3]*q[0]+p[1]*q[2]-p[2]*q[1]];
+}
+function rot3(v){
+    const a=qmul(qmul([rotation[0],-rotation[1],-rotation[2],-rotation[3]],[0,v[0],v[1],-v[2]]),[rotation[0],rotation[1],rotation[2],rotation[3]]);
+    return [a[1],-a[2],a[3]];
+}
+function rotor3(v){
+    const s=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+    if(s>0){
+    const sint=Math.sin(s);
+    return [Math.cos(s),sint*v[0]/s,sint*v[1]/s,sint*v[2]/s];
+    }
+    return [1,0,0,0];
+}
+fighter();
+for(let k=0; k<20; ++k){
+enemyfighter(points[math.randInt(0,points.length-1)].pos);
+}
+sphere(northpole,"sphere",15);
+main();
