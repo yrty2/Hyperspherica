@@ -1,11 +1,11 @@
 let shotInterval={
-    interval:4,
+    interval:6,
     timer:0,
 }
 
 function ray(){
     for(let k=0; k<1; ++k){
-        const s=(9+k);
+        const s=9+k-player.dist;
     box(rot3([2.5,3.5,s]),[1,1,1],[1,0,0],"rays",{move:[-3*forward[1],-3*forward[2],-3*forward[3]]});
     box(rot3([-2.5,3.5,s]),[1,1,1],[1,0,0],"rays",{move:[-3*forward[1],-3*forward[2],-3*forward[3]]});
     }
@@ -31,7 +31,7 @@ function gameloop(){
                         break;
                     }
                     if(q.tag=="enemy"){
-                    destroyEnemy(enemy.findIndex(e=>e.seed==q.info.seed));
+                    destroyEnemy(enemydata.findIndex(e=>e.seed==q.info.seed));
                     rays=deleteIndex(rays,rays.findIndex(e=>e.seed==p.seed));
                     break;
                     }
@@ -39,4 +39,13 @@ function gameloop(){
                 }
             }
     }
+}
+function destroyEnemy(id){
+    for(const p of points){
+        if(p.tag=="enemy" && p.info.seed==enemydata[id].seed){
+            p.tag="debri";
+        }
+    }
+    alert("you beat it!");
+    enemydata=deleteIndex(enemydata,id);
 }

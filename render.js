@@ -67,24 +67,36 @@ return vec4<f32>(p.x*q.x-dot(p.yzw,q.yzw),
            p.x*q.w+p.w*q.x+p.y*q.z-p.z*q.y);
 }
 @vertex
-fn main(@location(0) position: vec4<f32>,@location(1) normal: vec3<f32>,@location(2) color:vec3<f32>,@location(3) pos:vec4<f32>,@location(4) format:f32,@location(5) posture:vec4<f32>) -> VertexOutput {
+fn main(@location(0) position: vec4<f32>,@location(1) normal: vec3<f32>,@location(2) color:vec3<f32>,@location(3) pos:vec4<f32>,@location(4) format:f32,@location(5) posture:vec4<f32>,@location(6) joint:vec4<f32>) -> VertexOutput {
   let r=uniforms.constants.x;
   let center=vec4<f32>(0,0,0,-r);
   //posからrotを生成。
   let rotor=cliff2rotor(center,pos);
   var rot=array<f32,16>(rotor[0],0,0,0,0,rotor[1],rotor[4],rotor[3],rotor[2],rotor[5],rotor[6],0,0,0,0,0);
+  if(format==0 || format==2 || format==3 || format==4){
+  rot=mul(array<f32,16>(uniforms.rotation.x,0,0,0,0,
+  uniforms.rotation.w,-uniforms.rotation.z,0,uniforms.rotation.y,0,0,
+  0,0,0,0,
+  0),rot);
+  }
   var output : VertexOutput;
-  var q=position;
-  q=rotate(q,rot);
+  let q=rotate(position,rot);
   //ステレオグラフィック
   var p=q.xyz/(1-q.w/r);
   //姿勢制御
   var n=normal;
-  if(format==0 || format==2 || format==3){
-  p=qmul(qmul(uniforms.rotation,vec4<f32>(0,p)),vec4<f32>(uniforms.rotation.x,-uniforms.rotation.yzw)).yzw;
+  if(format==4){
+  let jo=rotate(joint,rot);
+    var j=jo.xyz/(1-jo.w/r);
+    p-=j;
+    p=qmul(qmul(posture,vec4<f32>(0,p)),vec4<f32>(posture.x,-posture.yzw)).yzw+j;
+  }
+  if(format==1){
+    p=qmul(qmul(posture,vec4<f32>(0,p)),vec4<f32>(posture.x,-posture.yzw)).yzw;
+  }
+  if(format==0 || format==2 || format==3 || format==4){
   n=qmul(qmul(uniforms.rotation,vec4<f32>(0,normal)),vec4<f32>(uniforms.rotation.x,-uniforms.rotation.yzw)).yzw;
   }
-  p=(qmul(qmul(posture,vec4<f32>(0,p)),vec4<f32>(posture.x,-posture.yzw)).yzw);
   //パースペクティブ
   p=vec3<f32>(p.x/p.z,uniforms.constants.y*p.y/p.z,p.z*rotor[7]/100000);
   if(abs(p.x)<=1.5 && abs(p.y)<=1.5){
@@ -170,7 +182,7 @@ const pipeline = g_device.createRenderPipeline({
         ],
       },
         {//インスタンス
-       	  arrayStride: 4*(3+4+1+4),
+       	  arrayStride: 4*(3+4+1+4+4),
           stepMode: 'instance',
           attributes: [
             {
@@ -193,6 +205,11 @@ const pipeline = g_device.createRenderPipeline({
               {
 			  shaderLocation:5,
               offset: 4*(3+4+1),
+              format: 'float32x4'
+            },
+              {
+			  shaderLocation:6,
+              offset: 4*(3+4+1+4),
               format: 'float32x4'
             }
           ]
@@ -284,7 +301,7 @@ const textureView = context.getCurrentTexture().createView();
   passEncoder.setVertexBuffer(0,verticesBuffer);
   passEncoder.setIndexBuffer(indicesBuffer, 'uint16');
   passEncoder.setVertexBuffer(1,instancesBuffer);
-  passEncoder.drawIndexed(quadIndexArray.length,Math.floor(instancePositions.length/(3+4+1+4)));
+  passEncoder.drawIndexed(quadIndexArray.length,Math.floor(instancePositions.length/(3+4+1+4+4)));
   passEncoder.end();
   g_device.queue.submit([commandEncoder.finish()]);
     requestAnimationFrame(render);

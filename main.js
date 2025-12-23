@@ -5,29 +5,28 @@ let moveVector=[0,0,1];
 let rotVelocity=[0,0];
 let rotation=[1,0,0,0];
 let forward=[0,0,0,0];
+let enemydata=[];
 let stars=[];
 let points=[];
 let rays=[];
 
 function translate(){
     keycontrol();
-    forward=qmul(qmul([rotation[0],-rotation[1],-rotation[2],-rotation[3]],[0,0,0,1/120]),[rotation[0],rotation[1],rotation[2],rotation[3]]);
+    forward=qmul(qmul([rotation[0],-rotation[1],-rotation[2],-rotation[3]],[0,0,0,player.speed]),[rotation[0],rotation[1],rotation[2],rotation[3]]);
     for(const s of stars){
+        //s.pos.translate(forward[1],-forward[2],forward[3]);
         s.pos.translate(forward[1],-forward[2],forward[3]);
     }
     for(const p of rays){
-        p.pos.translate(forward[1]+p.info.move[0],-forward[2]-p.info.move[1],forward[3]+p.info.move[2]);        
+        p.pos.translate(forward[1]+p.info.move[0],-forward[2]-p.info.move[1],forward[3]+p.info.move[2]);
     }
     for(const p of points){
-        if(p.tag!="fighter"){
+        if(p.tag=="fighter"){
+            let up=-rotVelocity[1]/2;
+            p.posture=rotor3([up,rotVelocity[0]/2,rotVelocity[0]]);
+        }else{
         p.pos.translate(forward[1],-forward[2],forward[3]);//ブーストで二倍
         //p.pos.rotate(1/240,0,0);
-        }else{
-            let up=-rotVelocity[1];
-            if(up>0){
-                up*=0.5;
-            }
-            p.posture=rotor3([up,rotVelocity[0]/2,rotVelocity[0]]);
         }
     }
     gameloop();
@@ -40,13 +39,16 @@ function instantiate(){
         if(q.tag=="fighter"){
             type=1;
         }
-        inst.push(...q.color,q.pos.x,q.pos.y,q.pos.z,q.pos.w,type,...q.posture);
+        if(q.tag=="enemy"){
+            type=4;
+        }
+        inst.push(...q.color,q.pos.x,q.pos.y,q.pos.z,q.pos.w,type,...q.posture,q.joint.x,q.joint.y,q.joint.z,q.joint.w);
     }
     for(const q of stars){
-        inst.push(1,1,1,q.pos.x,q.pos.y,q.pos.z,q.pos.w,3,1,0,0,0);
+        inst.push(1,1,1,q.pos.x,q.pos.y,q.pos.z,q.pos.w,3,1,0,0,0,q.joint.x,q.joint.y,q.joint.z,q.joint.w);
     }
     for(const r of rays){
-        inst.push(1,0,0,r.pos.x,r.pos.y,r.pos.z,r.pos.w,2,1,0,0,0);
+        inst.push(1,0,0,r.pos.x,r.pos.y,r.pos.z,r.pos.w,2,1,0,0,0,r.joint.x,r.joint.y,r.joint.z,r.joint.w);
     }
 }
 generate();
@@ -77,7 +79,7 @@ function plot(spherical,color,tag,info,joint,posture){
         posture=[1,0,0,0];
     }
     if(!joint){
-        joint=[0,0,0];
+        joint=spherical;
     }
     if(tag=="rays"){
         rays.push({
@@ -112,7 +114,7 @@ function plot(spherical,color,tag,info,joint,posture){
     }
 }
 function getrotor(p){
-    //これ以上高速化できるだろうか？
+    //諸悪の根源
     const g=center.rotor(p);
     if(g==-1){
         return [[1,0,0,0,0,0,0,0],0];
@@ -123,14 +125,6 @@ function getrotor(p){
         [Math.cos(t),g[0]*sint,g[1]*sint,g[2]*sint,g[3]*sint,g[4]*sint,g[5]*sint,0],
         t*2*p.r
         ];
-}
-function test(index){
-    const p=points[index].pos;
-    const R=getrotor(p);
-    console.log(R);
-    const rot=[R[0],0,0,0,0,R[1],R[2],R[3],R[4],R[5],R[6],0,0,0,0,R[7]];
-    center.cliffordrotate(rot);
-    console.log(p,center);
 }
 function lengthFromPlayer(p){
     const d=p.r*(Math.PI-Math.acos(p.w/Math.sqrt(p.x*p.x+p.y*p.y+p.z*p.z+p.w*p.w)));
@@ -152,23 +146,23 @@ function sphere(p,tag,s){
     }
 }
 //for modeling
-function boxp(p,pos,size,color,tag,info,joint){
+function boxp(p,pos,size,color,tag,info,joint,posture){
     const offset=[size[0]/2,size[1]/2,size[2]/2];
     for(let i=0; i<size[0]; ++i){
     for(let j=0; j<size[1]; ++j){
     for(let k=0; k<size[2]; ++k){
-        plot(p.translateBack((pos[0]-offset[0]+0.5)/100+i/100,(pos[1]-offset[1]+0.5)/100+j/100,(pos[2]-offset[2]+0.5)/100+k/100),color,tag,info,joint);
+        plot(p.translateBack((pos[0]-offset[0]+0.5)/100+i/100,(pos[1]-offset[1]+0.5)/100+j/100,(pos[2]-offset[2]+0.5)/100+k/100),color,tag,info,joint,posture);
     }
     }
     }
 }
-function box(pos,size,color,tag,info,joint){
+function box(pos,size,color,tag,info,joint,posture){
     //size should be in N
     const offset=[size[0]/2,size[1]/2,size[2]/2];
     for(let i=0; i<size[0]; ++i){
     for(let j=0; j<size[1]; ++j){
     for(let k=0; k<size[2]; ++k){
-        plot(center.translateBack((pos[0]-offset[0]+0.5)/100+i/100,(pos[1]-offset[1]+0.5)/100+j/100,(pos[2]-offset[2]+0.5)/100+k/100),color,tag,info,joint);
+        plot(center.translateBack((pos[0]-offset[0]+0.5)/100+i/100,(pos[1]-offset[1]+0.5)/100+j/100,(pos[2]-offset[2]+0.5)/100+k/100),color,tag,info,joint,posture);
     }
     }
     }
@@ -192,8 +186,15 @@ function rotor3(v){
     return [1,0,0,0];
 }
 fighter();
-for(let k=0; k<20; ++k){
-enemyfighter(points[math.randInt(0,points.length-1)].pos);
+function spawnEnemy(amount){
+    for(let k=0; k<amount; ++k){
+        const p=[Math.random(),Math.random(),Math.random(),Math.random()];
+        const s=Math.sqrt(p[0]*p[0]+p[1]*p[1]+p[2]*p[2]+p[3]*p[3]);
+        enemyfighter(northpole,[p[0]/s,p[1]/s,p[2]/s,p[3]/s]);
+    }
 }
-sphere(northpole,"sphere",15);
+//spawnEnemy(20);
+enemyfighter(center,[1,0,0,0])
+enemyfighter(center,[1/Math.sqrt(2),1/Math.sqrt(2),0,0])
+enemyfighter(center,[0,1,0,0])
 main();

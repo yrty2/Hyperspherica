@@ -1,3 +1,8 @@
+const player={
+    dist:-10,//-310isfun
+    speed:1/120,
+    speedboosted:1/1200,
+}
 let pointerlock=false;
 const key={
     w:false,
@@ -77,6 +82,11 @@ function keycontrol(){
     }
     if(key.leftClick){
         fire();
+    }
+    if(key.shift){
+        player.speed=player.speedboosted;
+    }else{
+        player.speed=1/120;
     }
     //moveVector should be normalize
     const size=Math.sqrt(moveVector[0]*moveVector[0]+moveVector[1]*moveVector[1]+moveVector[2]*moveVector[2]);
