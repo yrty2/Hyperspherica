@@ -3,4 +3,7 @@
 https://note.com/ochinpohamidori/n/n4be7ef4a3e60
 
 世界の半径は7です。
-体積は$${1700.5\pi^2}$$
+
+体積は11848.46
+
+見かけより非常に狭いです。
