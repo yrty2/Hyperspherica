@@ -1,5 +1,6 @@
 //旋回速度は限度があるようにする。
 //また、物体の姿勢を追加。四元数
+let debug=false;
 let trueview=true;
 let moveVector=[0,0,1];
 let rotVelocity=[0,0];
@@ -190,11 +191,11 @@ function spawnEnemy(amount){
     for(let k=0; k<amount; ++k){
         const p=[Math.random(),Math.random(),Math.random(),Math.random()];
         const s=Math.sqrt(p[0]*p[0]+p[1]*p[1]+p[2]*p[2]+p[3]*p[3]);
-        enemyfighter(northpole,[p[0]/s,p[1]/s,p[2]/s,p[3]/s]);
+        enemyfighter(center,[p[0]/s,p[1]/s,p[2]/s,p[3]/s]);
     }
 }
 //spawnEnemy(20);
 enemyfighter(center,[1,0,0,0])
-enemyfighter(center,[1/Math.sqrt(2),1/Math.sqrt(2),0,0])
-enemyfighter(center,[0,1,0,0])
+//enemyfighter(center,[Math.sqrt(2)/2,Math.sqrt(2)/2,0,0])
+//enemyfighter(center,[0,1,0,0])
 main();

@@ -26,7 +26,7 @@ function gameloop(){
             for(const q of points){
                 if(q.tag=="enemy" || q.tag=="sphere"){
                 if((q.pos.x-p.pos.x)*(q.pos.x-p.pos.x)+(q.pos.y-p.pos.y)*(q.pos.y-p.pos.y)+(q.pos.z-p.pos.z)*(q.pos.z-p.pos.z)+(q.pos.w-p.pos.w)*(q.pos.w-p.pos.w)<0.1 && q.pos.length(p.pos)<0.1){
-                    if(q.tag=="sphere"){
+                    if(q.tag=="sphere" || q.tag=="debri"){
                         rays=deleteIndex(rays,rays.findIndex(e=>e.seed==p.seed));
                         break;
                     }
@@ -39,6 +39,11 @@ function gameloop(){
                 }
             }
     }
+    for(const p of points){
+        if(p.tag=="enemy"){
+            p.posture=qmul([Math.cos(1/120),Math.sin(1/120),0,0],p.posture);
+        }
+    }
 }
 function destroyEnemy(id){
     for(const p of points){
@@ -46,6 +51,6 @@ function destroyEnemy(id){
             p.tag="debri";
         }
     }
-    alert("you beat it!");
+    console.log("you beat it!");
     enemydata=deleteIndex(enemydata,id);
 }
