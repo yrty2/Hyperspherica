@@ -102,8 +102,8 @@ window.addEventListener("mouseup",e=>{
 });
 window.addEventListener("mousemove",e=>{
     if(pointerlock){
-    canvas.requestPointerLock =canvas.requestPointerLock || canvas.mozRequestPointerLock;
-    canvas.requestPointerLock();
+    sc.requestPointerLock =sc.requestPointerLock || sc.mozRequestPointerLock;
+    sc.requestPointerLock();
     }
     const x=-e.movementX/400;
     const y=-e.movementY/400;

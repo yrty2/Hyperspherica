@@ -25,7 +25,8 @@ function gameloop(){
             //O(n^2)...ラグの温床になるよ
             for(const q of points){
                 if(q.tag=="enemy" || q.tag=="sphere"){
-                if((q.pos.x-p.pos.x)*(q.pos.x-p.pos.x)+(q.pos.y-p.pos.y)*(q.pos.y-p.pos.y)+(q.pos.z-p.pos.z)*(q.pos.z-p.pos.z)+(q.pos.w-p.pos.w)*(q.pos.w-p.pos.w)<0.1 && q.pos.length(p.pos)<0.1){
+                if((q.pos.x-p.pos.x)*(q.pos.x-p.pos.x)+(q.pos.y-p.pos.y)*(q.pos.y-p.pos.y)+(q.pos.z-p.pos.z)*(q.pos.z-p.pos.z)+(q.pos.w-p.pos.w)*(q.pos.w-p.pos.w)<0.06){
+                    if(q.pos.length(p.pos)<0.08){
                     if(q.tag=="sphere" || q.tag=="debri"){
                         rays=deleteIndex(rays,rays.findIndex(e=>e.seed==p.seed));
                         break;
@@ -36,6 +37,7 @@ function gameloop(){
                     break;
                     }
                 }
+                    }
                 }
             }
     }

@@ -1,56 +1,61 @@
-//旋回速度は限度があるようにする。
-//また、物体の姿勢を追加。四元数
+let world=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+//4次正方行列である必要がある？
 let debug=false;
-let trueview=true;
-let moveVector=[0,0,1];
+let dir=[0,0,1];
 let rotVelocity=[0,0];
 let rotation=[1,0,0,0];
-let forward=[0,0,0,0];
 let enemydata=[];
 let stars=[];
 let points=[];
 let rays=[];
-
+const sc=document.querySelector(".screencanvas");
+sc.width=screen.width;
+sc.height=screen.height;
+const ctx=sc.getContext("2d");
+ctx.font = "bold 22px serif";
 function translate(){
-    keycontrol();
-    forward=qmul(qmul([rotation[0],-rotation[1],-rotation[2],-rotation[3]],[0,0,0,player.speed]),[rotation[0],rotation[1],rotation[2],rotation[3]]);
-    for(const s of stars){
-        //s.pos.translate(forward[1],-forward[2],forward[3]);
-        s.pos.translate(forward[1],-forward[2],forward[3]);
-    }
-    for(const p of rays){
-        p.pos.translate(forward[1]+p.info.move[0],-forward[2]-p.info.move[1],forward[3]+p.info.move[2]);
-    }
-    for(const p of points){
-        if(p.tag=="fighter"){
-            let up=-rotVelocity[1]/2;
-            p.posture=rotor3([up,rotVelocity[0]/2,rotVelocity[0]]);
-        }else{
-        p.pos.translate(forward[1],-forward[2],forward[3]);//ブーストで二倍
-        //p.pos.rotate(1/240,0,0);
+    dir=rot3([0,0,1]);
+    ctx.clearRect(0,0,sc.width,sc.height);
+    ctx.fillStyle="#ffffff";
+    /*for(const p of points){
+        if(p.tag=="sphere"){
+            //p.pos=geo.translate(p.pos,vectormul(dir,0.002));
         }
     }
-    gameloop();
+    for(const p of stars){
+        //p.pos=geo.translate(p.pos,vectormul(dir,0.002));
+    }*/
+    world=mat.prod(world,geo.translateMatrix(vectormul(dir,0.002)));
     instantiate();
 }
 function instantiate(){
     inst=[];
     for(const q of points){
-        let type=0;
+        let type=1;
         if(q.tag=="fighter"){
             type=1;
         }
         if(q.tag=="enemy"){
             type=4;
         }
-        inst.push(...q.color,q.pos.x,q.pos.y,q.pos.z,q.pos.w,type,...q.posture,q.joint.x,q.joint.y,q.joint.z,q.joint.w);
+        inst.push(...q.color,...q.pos,type,...q.scale);
     }
     for(const q of stars){
-        inst.push(1,1,1,q.pos.x,q.pos.y,q.pos.z,q.pos.w,3,1,0,0,0,q.joint.x,q.joint.y,q.joint.z,q.joint.w);
+        inst.push(1,1,1,...q.pos,0,...q.scale);
     }
     for(const r of rays){
         inst.push(1,0,0,r.pos.x,r.pos.y,r.pos.z,r.pos.w,2,1,0,0,0,r.joint.x,r.joint.y,r.joint.z,r.joint.w);
     }
+}
+function poler4D(a,b,c){
+    const r=geo.radius;
+    let sinc=Math.sin(c);
+    let cosc=Math.cos(c);
+    if(geo.curvature<0){
+        sinc=Math.sinh(c);
+        cosc=Math.cosh(c);
+    }
+    return geo.projected([r*Math.cos(a)*Math.sin(b)*sinc,r*Math.sin(a)*Math.sin(b)*sinc,r*Math.cos(b)*sinc,r*cosc]);
 }
 generate();
 function generate(){
@@ -58,23 +63,19 @@ function generate(){
     for(let x=1; x<S; ++x){
     for(let y=1; y<S; ++y){
     for(let z=1; z<S; ++z){
-        const pos=new spherical4D(r,new cartesian4D(
-            Math.cos(2*Math.PI*x/S)*Math.sin(2*Math.PI*y/S)*Math.sin(2*Math.PI*z/S),
-            Math.sin(2*Math.PI*x/S)*Math.sin(2*Math.PI*y/S)*Math.sin(2*Math.PI*z/S),
-            Math.cos(2*Math.PI*y/S)*Math.sin(2*Math.PI*z/S),
-            Math.cos(2*Math.PI*z/S)).scale(r));
-        plot(pos,[1,1,1],"stars");
-        if(Math.random()<0.03/9 && lengthFromPlayer(pos)>2){
-        sphere(pos,"sphere",math.randInt(2,6));
-        }
+        const pos=poler4D(2*Math.PI*x/S,2*Math.PI*y/S,2*Math.PI*z/S);
+        plot(pos,[1,1,1],"stars",[0.1,0.1,0.1]);
     }
     }
     }
     instantiate();
 }
-function plot(spherical,color,tag,info,joint,posture){
+function plot(spherical,color,tag,scale,info,joint,posture){
     if(!tag){
         tag="global";
+    }
+    if(!scale){
+        scale=[1,1,1];
     }
     if(!posture){
         posture=[1,0,0,0];
@@ -98,6 +99,7 @@ function plot(spherical,color,tag,info,joint,posture){
         color:color,
         pos:spherical,
         tag:tag,
+        scale:scale,
         info:info,
         joint:joint,
         seed:Math.random()
@@ -106,6 +108,7 @@ function plot(spherical,color,tag,info,joint,posture){
     points.push({
         posture:posture,
         color:color,
+        scale:scale,
         pos:spherical,
         tag:tag,
         info:info,
@@ -114,33 +117,16 @@ function plot(spherical,color,tag,info,joint,posture){
     });
     }
 }
-function getrotor(p){
-    //諸悪の根源
-    const g=center.rotor(p);
-    if(g==-1){
-        return [[1,0,0,0,0,0,0,0],0];
-    }
-    const t=center.arg(p)/2;
-    const sint=Math.sin(t);
-    return [
-        [Math.cos(t),g[0]*sint,g[1]*sint,g[2]*sint,g[3]*sint,g[4]*sint,g[5]*sint,0],
-        t*2*p.r
-        ];
-}
-function lengthFromPlayer(p){
-    const d=p.r*(Math.PI-Math.acos(p.w/Math.sqrt(p.x*p.x+p.y*p.y+p.z*p.z+p.w*p.w)));
-    if(isNaN(d)){
-        return 0;
-    }
-    return d;
-}
 function sphere(p,tag,s){
     const C=[Math.random(),Math.random(),Math.random()];
-    for(let i=-s; i<=s; ++i){
-    for(let j=-s; j<=s; ++j){
-    for(let k=-s; k<=s; ++k){
-        if(Math.abs(i*i+j*j+k*k-s*s)<s && Math.abs(r*Math.PI/2-center.length(p))>3){
-    plot(p.translateBack(i/100,j/100,k/100),C,tag);
+    //球球対応
+    const a=0.04;
+    for(let i=-s; i<=s; i+=a){
+    for(let j=-s; j<=s; j+=a){
+    for(let k=-s; k<=s; k+=a){
+        if(Math.abs(i*i+j*j+k*k-s*s)<0.02){
+            const q=vectormul(vectornormalize([i,j,k]),geo.pd(vectorlength([i,j,k])));
+            plot(geo.translate(q,p),C,tag,[1,1,1]);
         }
     }
     }
@@ -157,17 +143,6 @@ function boxp(p,pos,size,color,tag,info,joint,posture){
     }
     }
 }
-function box(pos,size,color,tag,info,joint,posture){
-    //size should be in N
-    const offset=[size[0]/2,size[1]/2,size[2]/2];
-    for(let i=0; i<size[0]; ++i){
-    for(let j=0; j<size[1]; ++j){
-    for(let k=0; k<size[2]; ++k){
-        plot(center.translateBack((pos[0]-offset[0]+0.5)/100+i/100,(pos[1]-offset[1]+0.5)/100+j/100,(pos[2]-offset[2]+0.5)/100+k/100),color,tag,info,joint,posture);
-    }
-    }
-    }
-}
 function qmul(p,q){
     return [p[0]*q[0]-p[1]*q[1]-p[2]*q[2]-p[3]*q[3],
            p[0]*q[1]+p[1]*q[0]+p[2]*q[3]-p[3]*q[2],
@@ -175,8 +150,7 @@ function qmul(p,q){
            p[0]*q[3]+p[3]*q[0]+p[1]*q[2]-p[2]*q[1]];
 }
 function rot3(v){
-    const a=qmul(qmul([rotation[0],-rotation[1],-rotation[2],-rotation[3]],[0,v[0],v[1],-v[2]]),[rotation[0],rotation[1],rotation[2],rotation[3]]);
-    return [a[1],-a[2],a[3]];
+    return qmul(qmul([rotation[0],-rotation[1],-rotation[2],-rotation[3]],vectorneg([0,...v])),rotation).slice(1);
 }
 function rotor3(v){
     const s=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
@@ -186,7 +160,7 @@ function rotor3(v){
     }
     return [1,0,0,0];
 }
-fighter();
+//fighter();
 function spawnEnemy(amount){
     for(let k=0; k<amount; ++k){
         const p=[Math.random(),Math.random(),Math.random(),Math.random()];
@@ -194,8 +168,20 @@ function spawnEnemy(amount){
         enemyfighter(center,[p[0]/s,p[1]/s,p[2]/s,p[3]/s]);
     }
 }
+function mat4asarray(A){
+    const res=[];
+    for(let i=0; i<4; ++i){
+        for(let j=0; j<4; ++j){
+            res.push(A[i][j]);
+        }
+    }
+    return res;
+}
 //spawnEnemy(20);
-enemyfighter(center,[1,0,0,0])
+//enemyfighter(center,[1,0,0,0])
 //enemyfighter(center,[Math.sqrt(2)/2,Math.sqrt(2)/2,0,0])
 //enemyfighter(center,[0,1,0,0])
-main();
+sphere([0,0,0],"sphere",0.5);
+sphere([0,0,0.99],"sphere",0.5);
+//ほもとぴーの修正が必須。
+//main();
